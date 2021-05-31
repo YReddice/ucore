@@ -167,6 +167,8 @@ check_vmm(void) {
     check_vma_struct();
     check_pgfault();
 
+    assert(nr_free_pages_store == nr_free_pages());
+
     cprintf("check_vmm() succeeded.\n");
 }
 
@@ -226,6 +228,8 @@ check_vma_struct(void) {
     }
 
     mm_destroy(mm);
+
+    assert(nr_free_pages_store == nr_free_pages());
 
     cprintf("check_vma_struct() succeeded!\n");
 }
@@ -360,15 +364,26 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     * VARIABLES:
     *   mm->pgdir : the PDT of these vma
     *
-    */
-#if 0
-    /*LAB3 EXERCISE 1: YOUR CODE*/
-    ptep = ???              //(1) try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
-    if (*ptep == 0) {
-                            //(2) if the phy addr isn't exist, then alloc a page & map the phy addr with logical addr
-
+    *
+--------------------------------------------------------------------------------------------
+* 设计思路：
+    首先检查页表中是否有相应的表项，如果表项为空，那么说明没有映射过；
+    然后使用 pgdir_alloc_page 获取一个物理页，同时进行错误检查即可。*/
+/*LAB3 EXERCISE 1: YOUR CODE*/
+    // try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
+    // (notice the 3th parameter '1')
+    if ((ptep = get_pte(mm->pgdir, addr, 1)) == NULL) {
+        cprintf("get_pte in do_pgfault failed\n");
+        goto failed;
     }
-    else {
+    //如果页表不存在，尝试分配一空闲页，匹配物理地址与逻辑地址，建立对应关系
+    if (*ptep == 0) { // if the phy addr isn't exist, then alloc a page & map the phy addr with logical addr
+        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) { //失败内存不够退出
+            cprintf("pgdir_alloc_page in do_pgfault failed\n");
+            goto failed;
+        }
+    }
+--------------------------------------------------------------------------------------------
     /*LAB3 EXERCISE 2: YOUR CODE
     * Now we think this pte is a  swap entry, we should load data from disk to a page with phy addr,
     * and map the phy addr with logical addr, trigger swap manager to record the access situation of this page.
@@ -380,12 +395,27 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     *    page_insert ： build the map of phy addr of an Page with the linear addr la
     *    swap_map_swappable ： set the page swappable
     */
+    /*
+--------------------------------------------------------------------------------------------
+* 设计思路：
+    如果 PTE 存在，那么说明这一页已经映射过了但是被保存在磁盘中，需要将这一页内存交换出来：
+      1.调用 swap_in 将内存页从磁盘中载入内存；
+      2.调用 page_insert 建立物理地址与线性地址之间的映射；
+      3.设置页对应的虚拟地址，方便交换出内存时将正确的内存数据保存在正确的磁盘位置；
+      4.调用 swap_map_swappable 将物理页框加入 FIFO。*/
+/*LAB3 EXERCISE 2: YOUR CODE*/
+    //页表项非空，尝试换入页面
+    else { // if this pte is a swap entry, then load data from disk to a page with phy addr
+           // and call page_insert to map the phy addr with logical addr
         if(swap_init_ok) {
-            struct Page *page=NULL;
-                                    //(1）According to the mm AND addr, try to load the content of right disk page
-                                    //    into the memory which page managed.
-                                    //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
-                                    //(3) make the page swappable.
+            struct Page *page=NULL;//根据 mm 结构和 addr 地址，尝试将硬盘中的内容换入至 page 中
+            if ((ret = swap_in(mm, addr, &page)) != 0) {
+                cprintf("swap_in in do_pgfault failed\n");
+                goto failed;
+            }    
+            page_insert(mm->pgdir, page, addr, perm);//建立虚拟地址和物理地址之间的对应关系
+            swap_map_swappable(mm, addr, page, 1);//将此页面设置为可交换的
+            page->pra_vaddr = addr;
         }
         else {
             cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);

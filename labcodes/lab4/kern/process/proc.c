@@ -102,6 +102,29 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
+
+    /*
+    实现思路：
+    该函数的具体含义为创建一个新的进程控制块，并且对控制块中的所有成员变量进行初始化，根据实验指导书中的要求，除了指定的若干个成员变量之外，其他成员变量均初始化为0，
+    取特殊值的成员变量如下所示：
+    proc->state = PROC_UNINIT;
+    proc->pid = -1;
+    proc->cr3 = boot_cr3; // 由于是内核线程，共用一个虚拟内存空间
+    对于其他成员变量中占用内存空间较大的，可以考虑使用 memset 函数进行初始化。
+    */
+        /*code*/
+        proc->state = PROC_UNINIT;  //设置进程为未初始化状态
+        proc->pid = -1;             //未初始化的的进程id为-1
+        proc->runs = 0;             //初始化时间片
+        proc->kstack = 0;           //内存栈的地址
+        proc->need_resched = 0;     //是否需要调度设为不需要
+        proc->parent = NULL;        //父节点设为空
+        proc->mm = NULL;            //虚拟内存设为空
+        memset(&(proc->context), 0, sizeof(struct context));//上下文的初始化
+        proc->tf = NULL;            //中断帧指针置为空
+        proc->cr3 = boot_cr3;       //页目录设为内核页目录表的基址
+        proc->flags = 0;            //标志位
+        memset(proc->name, 0, PROC_NAME_LEN);//进程名
     }
     return proc;
 }

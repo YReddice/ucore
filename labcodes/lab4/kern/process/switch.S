@@ -14,7 +14,7 @@ switch_to:                      # switch_to(from, to)
     movl %ebp, 28(%eax)         # save ebp::context of from
 
     # restore to's registers
-    movl 4(%esp), %eax          # not 8(%esp): popped return address already
+    movl 4(%esp), %eax          # not 8(%esp): popped return address already  //to.context -> eax
                                 # eax now points to to
     movl 28(%eax), %ebp         # restore ebp::context of to
     movl 24(%eax), %edi         # restore edi::context of to
