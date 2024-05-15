@@ -41,8 +41,8 @@ _fifo_init_mm(struct mm_struct *mm)
 /*
  * (3)_fifo_map_swappable: According FIFO PRA, we should link the most recent arrival page at the back of pra_list_head qeueue
  */
-static int
-_fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
+// 作用: 将最近被用到的页面添加到算法所维护的次序队列。
+static int _fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
 {
     list_entry_t *head=(list_entry_t*) mm->sm_priv;
     list_entry_t *entry=&(page->pra_page_link);
@@ -51,14 +51,15 @@ _fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int
     //record the page access situlation
     /*LAB3 EXERCISE 2: YOUR CODE*/ 
     //(1)link the most recent arrival page at the back of the pra_list_head qeueue.
+    list_add(head, entry);//将最近用到的页面添加到次序的队尾
     return 0;
 }
 /*
  *  (4)_fifo_swap_out_victim: According FIFO PRA, we should unlink the  earliest arrival page in front of pra_list_head qeueue,
  *                            then assign the value of *ptr_page to the addr of this page.
  */
-static int
-_fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick)
+// 作用: 用来查询哪个页面需要被换出。
+static int _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick)
 {
      list_entry_t *head=(list_entry_t*) mm->sm_priv;
          assert(head != NULL);
@@ -67,6 +68,13 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
      /*LAB3 EXERCISE 2: YOUR CODE*/ 
      //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
      //(2)  assign the value of *ptr_page to the addr of this page
+     /* Select the tail */
+     list_entry_t *le = head->prev;//指出需要被换出的页
+     assert(head!=le);
+     struct Page *p = le2page(le, pra_page_link);//le2page 宏可以根据链表元素，获得对应 page 的指针p
+     list_del(le);//将进来最早的页面从队列中删除
+     assert(p !=NULL);
+     *ptr_page = p;//将这一页的地址存储在ptr_page中
      return 0;
 }
 
